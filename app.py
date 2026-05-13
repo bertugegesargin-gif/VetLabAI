@@ -15,11 +15,10 @@ if 'vaka_arsivi' not in st.session_state: st.session_state.vaka_arsivi = []
 # --- PDF GÖRÜNTÜLEME FONKSİYONU ---
 def pdf_goruntule(pdf_bytes):
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    # PDF'i bir iframe içinde web sayfasında gösterir
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="700" type="application/pdf"></iframe>'
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
     st.markdown(pdf_display, unsafe_allow_html=True)
 
-# --- GELİŞMİŞ TEŞHİS MOTORU ---
+# --- TEŞHİS MOTORU ---
 def vaka_analiz_motoru(tahlil_metni, kütüphane):
     teshisler = []
     for makale in kütüphane:
@@ -44,7 +43,7 @@ def vaka_analiz_motoru(tahlil_metni, kütüphane):
             teshisler.append({
                 "Hastalık": makale["Başlık"],
                 "Güven": f"%{min(skor * 25, 98)}",
-                "Analiz": "Kütüphanedeki bilimsel veriler, tahlildeki anomali tablosuyla yüksek oranda örtüşmektedir."
+                "Analiz": "Makale verilerine göre parametre sapmaları teşhisle örtüşmektedir."
             })
     return teshisler
 
@@ -61,29 +60,29 @@ if not st.session_state.logged_in:
 
 # --- SIDEBAR ---
 st.sidebar.title("🐾 VetLabAI")
-st.sidebar.write(f"Hoş geldin, **Bertuğ Ege Sargın**")
-menu = st.sidebar.radio("Navigasyon", ["📊 Dashboard", "🔬 Teşhis Paneli", "📚 Vaka Arşivi", "⚙️ AI Eğitim & Kütüphane"])
+st.sidebar.write(f"Kullanıcı: **Bertuğ Ege Sargın**")
+menu = st.sidebar.radio("Menü", ["📊 Dashboard", "🔬 Teşhis Paneli", "📚 Vaka Arşivi", "⚙️ AI Eğitim & Kütüphane"])
 
 # --- 1. DASHBOARD ---
 if menu == "📊 Dashboard":
     st.header("Klinik Durum Özeti")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Toplam Vaka", len(st.session_state.vaka_arsivi))
-    c2.metric("Kütüphane (Makale)", len(st.session_state.kutuphane))
-    c3.metric("Teşhis Motoru", "Aktif")
+    c1.metric("Vaka Arşivi", len(st.session_state.vaka_arsivi))
+    c2.metric("Öğrenilen Makale", len(st.session_state.kutuphane))
+    c3.metric("AI Kapasitesi", "Dinamik")
 
 # --- 2. TEŞHİS PANELİ ---
 elif menu == "🔬 Teşhis Paneli":
     st.header("🔬 Akıllı Teşhis Paneli")
-    up = st.file_uploader("Tahlil Dosyası Yükle", type=["pdf", "jpg", "png"])
+    up = st.file_uploader("Tahlil Dosyası", type=["pdf", "jpg", "png"])
     if up:
         col1, col2 = st.columns(2)
         with col1:
-            name = st.text_input("🐾 Hasta Adı")
-            age = st.number_input("🎂 Yaş", 0, 30)
+            name = st.text_input("Hasta Adı")
+            age = st.number_input("Yaş", 0, 30)
         with col2:
-            breed = st.text_input("🐕 Irk")
-            gender = st.selectbox("⚧ Cinsiyet", ["Erkek", "Dişi"])
+            breed = st.text_input("Irk")
+            gender = st.selectbox("Cinsiyet", ["Erkek", "Dişi"])
             
         if st.button("AI Analizini Başlat"):
             tahlil_text = ""
@@ -96,56 +95,50 @@ elif menu == "🔬 Teşhis Paneli":
                 for s in sonuclar:
                     st.success(f"### 🎯 Teşhis: {s['Hastalık']}")
                     st.write(f"**Güven Oranı:** {s['Güven']}")
-                    st.info(f"**🔍 Analiz Notu:** {s['Analiz']}")
                     st.session_state.vaka_arsivi.append({
                         "Tarih": datetime.now().strftime("%d/%m/%Y"),
                         "Hasta": name, "Teşhis": s['Hastalık'], "Güven": s['Güven']
                     })
-            else:
-                st.warning("Eşleşen bir hastalık bulunamadı.")
+            else: st.warning("Eşleşme bulunamadı.")
 
 # --- 3. VAKA ARŞİVİ ---
 elif menu == "📚 Vaka Arşivi":
     st.header("📖 Klinik Kayıt Arşivi")
     if st.session_state.vaka_arsivi:
-        st.table(pd.DataFrame(st.session_state.vaka_arsivi))
-    else:
-        st.info("Henüz kaydedilmiş bir vaka bulunmuyor.")
+        st.dataframe(pd.DataFrame(st.session_state.vaka_arsivi), use_container_width=True)
+    else: st.info("Kayıt yok.")
 
 # --- 4. AI EĞİTİM & KÜTÜPHANE ---
 elif menu == "⚙️ AI Eğitim & Kütüphane":
-    st.header("📚 AI Bilgi Bankası ve Kaynak Yönetimi")
+    st.header("📚 AI Bilgi Bankası")
     
-    new_pdf = st.file_uploader("Sisteme Yeni Makale Öğret (PDF)", type="pdf")
-    if new_pdf and st.button("Veriyi Hafızaya Al"):
+    new_pdf = st.file_uploader("Yeni Makale Yükle", type="pdf")
+    if new_pdf and st.button("Bilgiyi Kaydet"):
         with pdfplumber.open(new_pdf) as pdf:
             text = "".join([p.extract_text() for p in pdf.pages])
-        # PDF dosyasının kendisini de saklıyoruz
+        # PDF'in ham halini (bytes) de saklıyoruz ki sonra açabilelim
+        pdf_bytes = new_pdf.getvalue()
         st.session_state.kutuphane.append({
             "Başlık": new_pdf.name, 
             "İçerik": text, 
-            "Raw": new_pdf.getvalue()
+            "Raw": pdf_bytes
         })
-        st.success("Yeni bilgi başarıyla öğrenildi!")
+        st.success("Öğrenildi!")
 
     st.divider()
     st.subheader("📖 Öğrenilen Kaynaklar")
     
     if st.session_state.kutuphane:
         for idx, makale in enumerate(st.session_state.kutuphane):
-            col_name, col_view, col_del = st.columns([3, 1, 1])
-            with col_name:
-                # İsim Düzenleme Alanı
-                st.session_state.kutuphane[idx]['Başlık'] = st.text_input(f"Kaynak {idx+1}", value=makale['Başlık'], key=f"title_{idx}")
-            with col_view:
-                st.write(" ") # Hizalama
-                if st.button("📄 PDF Aç", key=f"open_{idx}"):
-                    st.info(f"{makale['Başlık']} Görüntüleniyor...")
+            col_a, col_b, col_c = st.columns([3, 1, 1])
+            with col_a:
+                st.session_state.kutuphane[idx]['Başlık'] = st.text_input(f"İsim {idx+1}", value=makale['Başlık'], key=f"n_{idx}")
+            with col_b:
+                if st.button("📄 Oku/Aç", key=f"open_{idx}"):
+                    st.info(f"Açılıyor: {makale['Başlık']}")
                     pdf_goruntule(makale['Raw'])
-            with col_del:
-                st.write(" ") # Hizalama
+            with col_c:
                 if st.button("🗑 Sil", key=f"del_{idx}"):
                     st.session_state.kutuphane.pop(idx)
                     st.rerun()
-    else:
-        st.info("Kütüphanede kayıtlı makale bulunamadı.")
+    else: st.info("Kütüphane boş.")
