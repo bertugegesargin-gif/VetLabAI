@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
+import base64
 from datetime import datetime
 
 # 1. Sayfa Ayarları
@@ -11,7 +12,13 @@ if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'kutuphane' not in st.session_state: st.session_state.kutuphane = []
 if 'vaka_arsivi' not in st.session_state: st.session_state.vaka_arsivi = []
 
-# --- GELİŞMİŞ TEŞHİS MOTORU ---
+# --- PDF GÖRÜNTÜLEME FONKSİYONU ---
+def pdf_goruntule(pdf_bytes):
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+# --- TEŞHİS MOTORU ---
 def vaka_analiz_motoru(tahlil_metni, kütüphane):
     teshisler = []
     for makale in kütüphane:
@@ -33,15 +40,10 @@ def vaka_analiz_motoru(tahlil_metni, kütüphane):
                 eslesen_parametreler.append(p_key)
         
         if skor >= 2:
-            ozet_neden = "Bilimsel veriler; yetersiz beslenme veya kronik süreçlere işaret etmektedir."
-            if "demir" in icerik or "anemi" in icerik:
-                ozet_neden = "Makale verilerine göre: Genç hayvanlarda yetersiz demir alımı veya paraziter yük temel nedendir."
-            
             teshisler.append({
                 "Hastalık": makale["Başlık"],
                 "Güven": f"%{min(skor * 25, 98)}",
-                "Kanıtlar": ", ".join(eslesen_parametreler),
-                "Analiz": ozet_neden
+                "Analiz": "Makale verilerine göre parametre sapmaları teşhisle örtüşmektedir."
             })
     return teshisler
 
@@ -73,7 +75,6 @@ if menu == "📊 Dashboard":
 elif menu == "🔬 Teşhis Paneli":
     st.header("🔬 Akıllı Teşhis Paneli")
     up = st.file_uploader("Tahlil Dosyası", type=["pdf", "jpg", "png"])
-    
     if up:
         col1, col2 = st.columns(2)
         with col1:
@@ -90,60 +91,54 @@ elif menu == "🔬 Teşhis Paneli":
                     tahlil_text = "".join([p.extract_text() for p in pdf.pages]).lower()
             
             sonuclar = vaka_analiz_motoru(tahlil_text, st.session_state.kutuphane)
-            
             if sonuclar:
                 for s in sonuclar:
                     st.success(f"### 🎯 Teşhis: {s['Hastalık']}")
                     st.write(f"**Güven Oranı:** {s['Güven']}")
-                    st.info(f"**🔍 Bilimsel Analiz:** {s['Analiz']}")
-                    
                     st.session_state.vaka_arsivi.append({
-                        "Tarih": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                        "Hasta": name, 
-                        "Tür/Irk": breed,
-                        "Teşhis": s['Hastalık'],
-                        "Güven": s['Güven']
+                        "Tarih": datetime.now().strftime("%d/%m/%Y"),
+                        "Hasta": name, "Teşhis": s['Hastalık'], "Güven": s['Güven']
                     })
-            else:
-                st.warning("Eşleşen bir hastalık bulunamadı.")
+            else: st.warning("Eşleşme bulunamadı.")
 
 # --- 3. VAKA ARŞİVİ ---
 elif menu == "📚 Vaka Arşivi":
     st.header("📖 Klinik Kayıt Arşivi")
     if st.session_state.vaka_arsivi:
-        df = pd.DataFrame(st.session_state.vaka_arsivi)
-        st.dataframe(df, use_container_width=True)
-        if st.button("Arşivi Temizle"):
-            st.session_state.vaka_arsivi = []
-            st.rerun()
-    else:
-        st.info("Henüz kaydedilmiş bir vaka bulunmuyor.")
+        st.dataframe(pd.DataFrame(st.session_state.vaka_arsivi), use_container_width=True)
+    else: st.info("Kayıt yok.")
 
 # --- 4. AI EĞİTİM & KÜTÜPHANE ---
 elif menu == "⚙️ AI Eğitim & Kütüphane":
-    st.header("📚 AI Bilgi Bankası Yönetimi")
+    st.header("📚 AI Bilgi Bankası")
     
-    new_pdf = st.file_uploader("Yeni Makale Yükle (PDF)", type="pdf")
+    new_pdf = st.file_uploader("Yeni Makale Yükle", type="pdf")
     if new_pdf and st.button("Bilgiyi Kaydet"):
         with pdfplumber.open(new_pdf) as pdf:
             text = "".join([p.extract_text() for p in pdf.pages])
-        st.session_state.kutuphane.append({"Başlık": new_pdf.name, "İçerik": text})
+        # PDF'in ham halini (bytes) de saklıyoruz ki sonra açabilelim
+        pdf_bytes = new_pdf.getvalue()
+        st.session_state.kutuphane.append({
+            "Başlık": new_pdf.name, 
+            "İçerik": text, 
+            "Raw": pdf_bytes
+        })
         st.success("Öğrenildi!")
 
     st.divider()
-    st.subheader("📖 Öğrenilen Kaynaklar ve İsim Düzenleme")
+    st.subheader("📖 Öğrenilen Kaynaklar")
     
     if st.session_state.kutuphane:
         for idx, makale in enumerate(st.session_state.kutuphane):
-            col_a, col_b = st.columns([3, 1])
+            col_a, col_b, col_c = st.columns([3, 1, 1])
             with col_a:
-                yeni_isim = st.text_input(f"Kaynak {idx+1} İsmi", value=makale['Başlık'], key=f"edit_{idx}")
-                if yeni_isim != makale['Başlık']:
-                    st.session_state.kutuphane[idx]['Başlık'] = yeni_isim
+                st.session_state.kutuphane[idx]['Başlık'] = st.text_input(f"İsim {idx+1}", value=makale['Başlık'], key=f"n_{idx}")
             with col_b:
-                st.write(" ") # Hizalama için
-                if st.button("Kaydı Sil", key=f"del_{idx}"):
+                if st.button("📄 Oku/Aç", key=f"open_{idx}"):
+                    st.info(f"Açılıyor: {makale['Başlık']}")
+                    pdf_goruntule(makale['Raw'])
+            with col_c:
+                if st.button("🗑 Sil", key=f"del_{idx}"):
                     st.session_state.kutuphane.pop(idx)
                     st.rerun()
-    else:
-        st.info("Kütüphane boş.")
+    else: st.info("Kütüphane boş.")
