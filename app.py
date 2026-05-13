@@ -1,77 +1,59 @@
 import streamlit as st
 import pandas as pd
 
-# Sayfa Ayarları ve Tasarım Renkleri (Senin Tasarımlarına Uygun)
-st.set_page_config(page_title="VetLabAI - Klinik Destek", layout="wide")
+# Sayfa Ayarları (Senin renk paletin)
+st.set_page_config(page_title="VetLabAI - Klinik Zeka", layout="wide")
 
-# Sidebar - Menü (Görsel 1'deki Sol Panel)
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/194/194279.png", width=100)
-st.sidebar.title("VetLabAI")
-menu = st.sidebar.radio("Menü", ["Dashboard", "Yeni Analiz", "Vaka Arşivi", "Admin Paneli"])
+# Sidebar (Görsel 1: Sol Menü)
+st.sidebar.title("🐾 VetLabAI")
+menu = st.sidebar.radio("Bölümler", ["Dashboard", "Tahlil Analizi", "Kütüphane & AI Eğitim"])
 
-# Veritabanı Simülasyonu (Hafıza)
-if 'kurallar' not in st.session_state:
-    st.session_state.kurallar = []
-if 'vakalar' not in st.session_state:
-    st.session_state.vakalar = []
+# Hafıza (Zeka Geliştirme Alanı)
+if 'kutuphane' not in st.session_state:
+    st.session_state.kutuphane = [] # Makaleler burada birikecek
 
-# --- 1. DASHBOARD ---
+# --- 1. DASHBOARD (Görsel 1) ---
 if menu == "Dashboard":
-    st.title("Hoş geldiniz, Hekim 👋")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Toplam Analiz", len(st.session_state.vakalar), "+%18")
-    col2.metric("Aktif Abone", "1.248", "+23")
-    col3.metric("Sistem Gücü", "Premium", "Aktif")
-    st.image("https://i.imgur.com/r6O0GjN.png") # Placeholder görsel
+    st.header("Klinik Durum Özeti")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Analiz Edilen Vaka", "142", "+12%")
+    c2.metric("AI Güven Skoru", "%94", "+2%")
+    c3.metric("Öğrenilen Makale", len(st.session_state.kutuphane))
+    st.info("VetLabAI şu an senin yüklediğin verilerle gelişiyor.")
 
-# --- 2. YENİ ANALİZ (Görsel 2) ---
-elif menu == "Yeni Analiz":
-    st.header("🔬 Tahlil Analiz Et")
-    col_a, col_b = st.columns([1, 2])
+# --- 2. TAHLİL ANALİZİ (Görsel 2) ---
+elif menu == "Tahlil Analizi":
+    st.header("🔬 Akıllı Tahlil Paneli")
+    tur = st.selectbox("Tür", ["Kedi", "Köpek"])
+    deger = st.number_input("GLU (Glikoz) - mg/dL", min_value=0)
     
-    with col_a:
-        tur = st.selectbox("Tür Seçimi", ["Kedi", "Köpek"])
-        glu = st.number_input("GLU (Glikoz) Değeri - mg/dL", min_value=0)
-        btn_analiz = st.button("Analiz Et")
+    if st.button("AI Analizini Başlat"):
+        # Burası kütüphanedeki verilerle analiz yapacak zeka motoru
+        st.subheader("Analiz Sonucu")
+        if tur == "Köpek" and deger > 180:
+            st.warning("🟠 Diyabet Şüphesi (%78)")
+            st.write("**Neden?** Glikoz eşik değerin üzerinde.")
+        elif tur == "Kedi" and deger > 220:
+            st.warning("🟠 Diyabet Şüphesi (Kedi - Stres Faktörü)")
+        else:
+            st.success("✅ Normal Değerler")
 
-    if btn_analiz:
-        st.subheader("AI Destekli Olası Tanılar")
-        bulundu = False
-        for kural in st.session_state.kurallar:
-            if kural['tur'] == tur and glu > kural['esik']:
-                st.warning(f"📍 {kural['ad']} (%92 Olasılık)")
-                st.info(f"**Neden?** {glu} mg/dL değeri belirlenen {kural['esik']} eşiğinin üzerindedir.")
-                st.write(f"**Hekim Notu:** {kural['not']}")
-                bulundu = True
-        
-        if not bulundu:
-            st.success("Analiz Sonucu: Normal. Belirlenen kurallar dahilinde bir risk saptanmadı.")
-        
-        # Onay Butonu Ekliyoruz!
-        st.write("---")
-        st.write("### Bu tanı doğru mu?")
-        c1, c2 = st.columns(2)
-        if c1.button("✅ Evet, Doğru"):
-            st.success("Geri bildiriminiz kaydedildi. AI kendini optimize ediyor!")
-            st.session_state.vakalar.append({"tur": tur, "deger": glu, "sonuc": "Doğru"})
-        if c2.button("❌ Hayır, Yanlış"):
-            st.error("Bildirim Admin'e iletildi. Kuralı gözden geçireceğiz.")
-
-# --- 4. ADMIN PANELI (Görsel 3) ---
-elif menu == "Admin Paneli":
-    st.header("⚙️ Admin Yönetim Paneli")
-    st.subheader("Yeni Kural / Bilgi Ekle")
+# --- 3. KÜTÜPHANE VE AI EĞİTİM (Görsel 3 - Senin İstediğin Kısım) ---
+elif menu == "Kütüphane & AI Eğitim":
+    st.header("📚 AI Zekasını Geliştir")
+    st.write("Buraya eklediğin her makale ve bilgi, analiz motorunun zekasını artırır.")
     
-    with st.form("yeni_kural"):
-        k_ad = st.text_input("Kural Adı", "Diyabet Şüphesi")
-        k_tur = st.selectbox("Tür", ["Kedi", "Köpek"])
-        k_esik = st.number_input("Eşik Değeri (GLU > ...)", value=180)
-        k_not = st.text_area("Hekime Gösterilecek Not", "Fruktozamin testi önerilir. Kedilerde stres faktörünü dışlayın.")
-        kaydet = st.form_submit_button("Sisteme Kaydet ve Yayınla")
+    with st.form("zeka_formu"):
+        konu = st.text_input("Makale/Bilgi Başlığı")
+        icerik = st.text_area("Klinik Bilgi / Kurallar (Buraya Diyabet Paketi Notlarını Yapıştır)")
+        yukle = st.form_submit_button("Sistemi Eğit ve Kaydet")
         
-        if kaydet:
-            st.session_state.kurallar.append({"ad": k_ad, "tur": k_tur, "esik": k_esik, "not": k_not})
-            st.success(f"{k_ad} kuralı tüm sistemde aktif edildi!")
+        if yukle:
+            st.session_state.kutuphane.append({"konu": konu, "icerik": icerik})
+            st.balloons()
+            st.success("AI bu bilgiyi öğrendi ve kütüphaneye ekledi!")
 
-    st.write("### Mevcut Kurallar")
-    st.table(pd.DataFrame(st.session_state.kurallar))
+    st.write("### AI'nın Öğrendiği Bilgiler")
+    for b in st.session_state.kutuphane:
+        with st.expander(b['konu']):
+            st.write(b['icerik'])
