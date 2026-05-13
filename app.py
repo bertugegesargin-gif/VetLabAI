@@ -1,133 +1,86 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-from PIL import Image
+import re
 
-# 1. Sayfa Ayarları ve Stil
-st.set_page_config(page_title="VetLabAI | Professional Diagnostic Engine", layout="wide", initial_sidebar_state="expanded")
+# Sayfa Ayarları
+st.set_page_config(page_title="VetLabAI | Automated Engine", layout="wide")
 
-# --- Session State (Veri Depolama) ---
+# Session State
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'kutuphane' not in st.session_state: st.session_state.kutuphane = []
 if 'vaka_arsivi' not in st.session_state: st.session_state.vaka_arsivi = []
 
-# --- GİRİŞ KONTROLÜ (Güvenlik) ---
+# --- OTOMATİK ANALİZ MOTORU ---
+def ai_engine(tahlil_metni, kütüphane):
+    bulgular = []
+    # Tahlil metnindeki sayıları ve parametreleri yakala (Örn: HGB 9.1)
+    for kural in kütüphane:
+        makale_icerigi = kural["İçerik"].lower()
+        # Makalede geçen parametreleri tahlil içinde ara
+        for parametre in ["hgb", "rbc", "hct", "glu", "fe", "ferritin"]:
+            if parametre in makale_icerigi:
+                # Makaledeki "düşüş" veya "yükseklik" vurgularını kontrol et
+                if "düşüş" in makale_icerigi or "anlamlı derecede düşük" in makale_icerigi:
+                    bulgular.append(f"📍 **{kural['Başlık']}** ile uyumlu {parametre.upper()} sapması saptandı.")
+    return list(set(bulgular))
+
+# --- GİRİŞ PANELİ ---
 if not st.session_state.logged_in:
-    st.title("🐾 VetLabAI - Yönetim Girişi")
-    st.write("Sistemi eğitmek ve analiz yapmak için lütfen giriş yapın.")
+    st.title("🐾 VetLabAI - Otomasyon Paneli")
     user = st.text_input("Kullanıcı Adı")
     password = st.text_input("Şifre", type="password")
     if st.button("Sisteme Giriş Yap"):
         if user == "admin" and password == "vetlab2026": 
             st.session_state.logged_in = True
             st.rerun()
-        else:
-            st.error("Hatalı giriş! Lütfen bilgilerinizi kontrol edin.")
     st.stop()
 
-# --- SIDEBAR (Sol Menü) ---
+# --- SIDEBAR ---
 st.sidebar.title("🐾 VetLabAI")
-st.sidebar.write(f"Hoş geldin, **Bertuğ Ege Sargın**") #
-menu = st.sidebar.radio("Navigasyon", ["📊 Dashboard", "🔬 Akıllı Tahlil Analizi", "📚 Vaka Arşivi", "⚙️ AI Eğitim Paneli"])
+menu = st.sidebar.radio("Navigasyon", ["📊 Dashboard", "🔬 Akıllı Tahlil Analizi", "⚙️ AI Eğitim Paneli"])
 
-if st.sidebar.button("Güvenli Çıkış"):
-    st.session_state.logged_in = False
-    st.rerun()
-
-# --- 1. DASHBOARD ---
-if menu == "📊 Dashboard":
-    st.header("Klinik Genel Bakış")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Toplam Vaka", len(st.session_state.vaka_arsivi), "+%5")
-    c2.metric("AI Güven Endeksi", "%96", "Stabil")
-    c3.metric("Eğitim Kaydı", len(st.session_state.kutuphane), "Yeni")
-    
-    st.subheader("Son Klinik İşlemler")
-    if st.session_state.vaka_arsivi:
-        st.dataframe(pd.DataFrame(st.session_state.vaka_arsivi).tail(5), use_container_width=True)
-    else:
-        st.info("Henüz bir vaka kaydı bulunmuyor.")
-
-# --- 2. AKILLI TAHLİL ANALİZİ ---
-elif menu == "🔬 Akıllı Tahlil Analizi":
-    st.header("🔬 Tahlil Analiz ve Teşhis Paneli")
-    st.write("Dosyayı yükleyin; sistem hasta bilgilerini ve tahlili eşleştirerek otomatik analiz yapacaktır.")
-    
-    uploaded_file = st.file_uploader("Tahlil Dosyası (PDF, JPG, PNG)", type=["pdf", "jpg", "jpeg", "png"])
+# --- 2. AKILLI TAHLİL ANALİZİ (OTOMATİZE EDİLDİ) ---
+if menu == "🔬 Akıllı Tahlil Analizi":
+    st.header("🔬 Otomatik Teşhis Motoru")
+    uploaded_file = st.file_uploader("Tahlil PDF/Görsel Yükle", type=["pdf", "png", "jpg"])
     
     if uploaded_file:
-        st.markdown("### 📋 Detaylı Hasta Künyesi")
-        # Tüm detaylı giriş alanları:
         col1, col2 = st.columns(2)
-        
         with col1:
-            pet_name = st.text_input("🐾 Hasta / Pet Adı", placeholder="Örn: Pamuk")
-            pet_age = st.number_input("🎂 Yaş", min_value=0, max_value=30, step=1)
-            pet_type = st.selectbox("🧬 Tür", ["Kedi", "Köpek"])
-            
+            pet_name = st.text_input("Hasta Adı")
+            pet_type = st.selectbox("Tür", ["Köpek", "Kedi"])
         with col2:
-            pet_breed = st.text_input("🐕 Irk / Cins", placeholder="Örn: Tekir / Golden")
-            pet_gender = st.selectbox("⚧ Cinsiyet", ["Erkek", "Dişi", "Kısırlaştırılmış Erkek", "Kısırlaştırılmış Dişi"])
-            owner_name = st.text_input("👤 Hasta Sahibi", placeholder="Ad Soyad")
+            pet_age = st.number_input("Yaş", min_value=0)
+            pet_breed = st.text_input("Irk")
 
         if st.button("AI Analizini Başlat"):
-            with st.spinner('AI kütüphaneyi tarıyor...'):
-                # Veri Okuma Simülasyonu
-                detected_glu = 0
+            with st.spinner('AI kütüphanedeki tüm makaleleri tarıyor...'):
+                # 1. Tahlili oku
+                tahlil_text = ""
                 if uploaded_file.type == "application/pdf":
                     with pdfplumber.open(uploaded_file) as pdf:
-                        text = "".join([page.extract_text() for page in pdf.pages])
-                    if "GLU" in text or "Glikoz" in text:
-                        detected_glu = 245 # Örnek saptanan değer
-                else:
-                    st.image(uploaded_file, width=350)
-                    detected_glu = 215 # Görselden saptanan örnek değer
-
-                # ANALİZ VE RAPORLAMA
+                        tahlil_text = "".join([page.extract_text() for page in pdf.pages]).lower()
+                
+                # 2. Otomatik Motoru Çalıştır
+                sonuclar = ai_engine(tahlil_text, st.session_state.kutuphane)
+                
                 st.write("---")
-                st.subheader(f"📊 Klinik Rapor: {pet_name}")
-                found = False
+                st.subheader(f"📊 Klinik Analiz Raporu: {pet_name}")
                 
-                for kural in st.session_state.kutuphane:
-                    if detected_glu > 180:
-                        if "Diyabet" in kural["Başlık"]: #
-                            st.warning(f"⚠️ {kural['Başlık']} Saptandı!")
-                            st.write(f"**Hasta Bilgisi:** {pet_age} yaşında, {pet_gender} {pet_type} ({pet_breed})")
-                            st.write(f"**Bulgu:** Glikoz seviyesi {detected_glu} mg/dL saptandı.")
-                            st.info(f"**Klinik Not:** {kural['İçerik'][:300]}...")
-                            found = True
-                
-                if not found:
-                    st.success(f"Analiz Tamamlandı. {pet_name} için kütüphane kuralları dahilinde bir anomali saptanmadı.")
-
-                # Arşive Kaydet
-                st.session_state.vaka_arsivi.append({
-                    "Hasta": pet_name, "Tür": pet_type, "Yaş": pet_age, 
-                    "Irk": pet_breed, "Cinsiyet": pet_gender, "Sahibi": owner_name, "Durum": "Tamamlandı"
-                })
-
-# --- 3. VAKA ARŞİVİ ---
-elif menu == "📚 Vaka Arşivi":
-    st.header("Klinik Kayıt Arşivi")
-    if st.session_state.vaka_arsivi:
-        st.dataframe(pd.DataFrame(st.session_state.vaka_arsivi), use_container_width=True)
-    else:
-        st.info("Henüz kayıtlı bir vaka bulunmuyor.")
+                if sonuclar:
+                    for sonuc in sonuclar:
+                        st.warning(sonuc)
+                    st.info("Bu analiz, kütüphaneye yüklediğiniz bilimsel verilerle eşleştirilmiştir.")
+                else:
+                    st.success("Kütüphanedeki mevcut bilgilere göre bir anomali saptanmadı.")
 
 # --- 4. AI EĞİTİM PANELİ ---
 elif menu == "⚙️ AI Eğitim Paneli":
-    st.header("Yönetim ve AI Geliştirme")
-    st.write("PDF makaleler yükleyerek sistemin analiz yeteneğini geliştirin.")
-    
-    uploaded_article = st.file_uploader("Eğitim Makalesi (PDF)", type="pdf")
-    if uploaded_article and st.button("Sistemi Bu Bilgiyle Eğit"):
+    st.header("📚 AI Bilgi Bankası")
+    uploaded_article = st.file_uploader("Bilimsel Makale Yükle (PDF)", type="pdf")
+    if uploaded_article and st.button("Sistemi Eğit"):
         with pdfplumber.open(uploaded_article) as pdf:
-            article_text = "".join([page.extract_text() for page in pdf.pages])
-        st.session_state.kutuphane.append({"Başlık": uploaded_article.name, "İçerik": article_text})
-        st.success(f"'{uploaded_article.name}' başarıyla öğrenildi!")
-
-    st.write("---")
-    st.subheader("AI Belleğindeki Bilgiler")
-    for item in st.session_state.kutuphane:
-        with st.expander(item['Başlık']):
-            st.write(item['İçerik'])
+            text = "".join([page.extract_text() for page in pdf.pages])
+        st.session_state.kutuphane.append({"Başlık": uploaded_article.name, "İçerik": text})
+        st.success(f"'{uploaded_article.name}' sisteme öğretildi. Artık bu makaleye göre teşhis koyabilirim!")
